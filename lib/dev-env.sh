@@ -384,9 +384,8 @@ cmd_up() {
     local generate_files=$(get_config_array "generateFiles")
     # This would need more complex YAML parsing - simplified for now
 
-    # Copy files
-    local copy_files=$(get_config "copyFiles")
-    # This would need more complex YAML parsing - simplified for now
+    # Copy files from main repo to worktree
+    copy_files_to_worktree "$project_root" "$worktree_path"
 
     # Execute post-setup hook
     local post_setup=$(get_config "hooks.post-setup")

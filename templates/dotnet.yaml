@@ -47,8 +47,7 @@ hooks:
   pre-cleanup: ""
 
 copyFiles:                      # Files to copy from main repo to worktree
-  - from: src/MyProject.Web/test-data.csv
-    to: src/MyProject.Web/test-data.csv
+  - src/MyProject.Web/test-data.csv  # Can also specify from: and to: for different source/destination paths, see README.md
 
 generateFiles:                  # Files to generate from template
   - path: src/MyProject.Web/appsettings.local.json

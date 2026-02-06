@@ -402,6 +402,40 @@ set_terminal_title() {
 }
 
 #
+# File Copying
+#
+
+# Copy files from main repo to worktree
+# Reads copyFiles config and copies each file
+copy_files_to_worktree() {
+    local project_root="$1"
+    local worktree_path="$2"
+    local config_file="$project_root/.claude/dev-env.yaml"
+
+    local entries
+    entries=$(parse_copy_files "$config_file")
+    [ -z "$entries" ] && return 0
+
+    echo "Copying files..."
+    while IFS='|' read -r from_path to_path; do
+        [ -z "$from_path" ] && continue
+
+        local src="$project_root/$from_path"
+        local dst="$worktree_path/$to_path"
+
+        if [ ! -f "$src" ]; then
+            echo "  Warning: Source file not found: $from_path" >&2
+            continue
+        fi
+
+        # Ensure destination directory exists
+        mkdir -p "$(dirname "$dst")"
+        cp "$src" "$dst"
+        echo "  Copied: $from_path → $to_path"
+    done <<< "$entries"
+}
+
+#
 # Hook Execution
 #
 

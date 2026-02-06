@@ -124,8 +124,24 @@ hooks:                          # Lifecycle hooks (shell commands)
   pre-cleanup: ""
 
 copyFiles:                      # Files to copy to worktree
+  - src/Web/test-data.csv
+```
+
+### copyFiles
+
+Copies files from the main repo into each new worktree. Useful for config files, test data, or secrets that aren't tracked in git.
+
+```yaml
+copyFiles:
+  # Short form — same relative path in worktree
+  - src/Web/test-data.csv
+
+  # from-only — also keeps the same path (equivalent to above)
   - from: src/Web/test-data.csv
-    to: src/Web/test-data.csv
+
+  # Explicit destination — when the worktree path should differ
+  - from: config/template.json
+    to: config/local.json
 ```
 
 ## Environment Variables

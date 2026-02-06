@@ -214,6 +214,76 @@ process_template() {
     echo "$result"
 }
 
+# Parse copyFiles array from YAML config
+# Returns lines of "from|to" pairs (to defaults to from if omitted)
+parse_copy_files() {
+    local yaml_file="$1"
+    local in_section=false
+    local current_from=""
+
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="${line//$'\r'/}"
+
+        # Detect start of copyFiles section
+        if [[ "$line" =~ ^copyFiles: ]]; then
+            in_section=true
+            continue
+        fi
+
+        if [ "$in_section" = true ]; then
+            # End of section: non-indented, non-empty line that isn't an array item
+            if [[ -n "$line" && ! "$line" =~ ^[[:space:]] ]]; then
+                # Flush last entry
+                if [ -n "$current_from" ]; then
+                    echo "${current_from}|${current_from}"
+                fi
+                break
+            fi
+
+            # Array item with "from:" on same line
+            if [[ "$line" =~ ^[[:space:]]*-[[:space:]]*from:[[:space:]]*(.*) ]]; then
+                # Flush previous entry that had no "to:"
+                if [ -n "$current_from" ]; then
+                    echo "${current_from}|${current_from}"
+                fi
+                current_from="${BASH_REMATCH[1]}"
+                current_from=$(echo "$current_from" | sed "s/^[\"']//;s/[\"']$//;s/[[:space:]]*$//")
+                continue
+            fi
+
+            # "to:" line following a "from:"
+            if [[ "$line" =~ ^[[:space:]]+to:[[:space:]]*(.*) ]] && [ -n "$current_from" ]; then
+                local to_val="${BASH_REMATCH[1]}"
+                to_val=$(echo "$to_val" | sed "s/^[\"']//;s/[\"']$//;s/[[:space:]]*$//")
+                if [ -z "$to_val" ]; then
+                    to_val="$current_from"
+                fi
+                echo "${current_from}|${to_val}"
+                current_from=""
+                continue
+            fi
+
+            # Simple string array item: "- path/to/file"
+            if [[ "$line" =~ ^[[:space:]]*-[[:space:]]+(.*) ]]; then
+                # Flush previous
+                if [ -n "$current_from" ]; then
+                    echo "${current_from}|${current_from}"
+                    current_from=""
+                fi
+                local val="${BASH_REMATCH[1]}"
+                val=$(echo "$val" | sed "s/^[\"']//;s/[\"']$//;s/[[:space:]]*$//")
+                echo "${val}|${val}"
+                continue
+            fi
+        fi
+    done < "$yaml_file"
+
+    # Flush if file ended while in section
+    if [ "$in_section" = true ] && [ -n "$current_from" ]; then
+        echo "${current_from}|${current_from}"
+    fi
+}
+
 # Validate configuration has required fields
 validate_config() {
     local errors=()
