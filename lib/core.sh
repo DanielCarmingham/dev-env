@@ -412,7 +412,8 @@ execute_hook() {
 
     if [ -n "$hook_cmd" ]; then
         echo "Running hook: $hook_name"
-        eval "$hook_cmd"
+        # Use bash -c to execute multi-line scripts properly
+        bash -c "$hook_cmd"
         local result=$?
         if [ $result -ne 0 ]; then
             echo "Warning: Hook '$hook_name' failed with exit code $result" >&2

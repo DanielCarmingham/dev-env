@@ -2,8 +2,14 @@
 # YAML configuration parsing for dev-env plugin
 # Parses .claude/dev-env.yaml into shell variables
 
-# Parse YAML file into associative array-style variables
-# Supports simple key: value pairs, nested objects, and arrays
+# Simple YAML parser that handles nested keys and multi-line blocks
+# Converts YAML like:
+#   database:
+#     connection:
+#       host: localhost
+# Into: DEV_ENV_DATABASE_CONNECTION_HOST=localhost
+#
+# Also supports multi-line blocks with | or >
 parse_yaml() {
     local yaml_file="$1"
     local prefix="${2:-CONFIG_}"
@@ -13,91 +19,109 @@ parse_yaml() {
         return 1
     fi
 
-    local line key value current_section=""
-    local in_array=false array_name="" array_values=""
+    local key_stack=()
+    local prev_indent=0
+    local in_multiline=false
+    local multiline_key=""
+    local multiline_value=""
+    local multiline_indent=0
 
     while IFS= read -r line || [ -n "$line" ]; do
+        # Strip carriage returns (Windows line endings)
+        line="${line//$'\r'/}"
+
+        # Handle multi-line block continuation
+        if [ "$in_multiline" = true ]; then
+            # Count leading spaces
+            local stripped="${line#"${line%%[![:space:]]*}"}"
+            local line_indent=$(( (${#line} - ${#stripped}) / 2 ))
+
+            # Check if we're still in the block (indented more than the key)
+            if [ -z "$line" ] || [ $line_indent -gt $multiline_indent ]; then
+                # Add to multiline value (preserve the line with its indentation relative to block)
+                if [ -n "$multiline_value" ]; then
+                    multiline_value="${multiline_value}
+${stripped}"
+                else
+                    multiline_value="$stripped"
+                fi
+                continue
+            else
+                # End of multiline block - export it
+                eval "export ${prefix}${multiline_key}=\$multiline_value"
+                in_multiline=false
+                multiline_key=""
+                multiline_value=""
+                # Fall through to process current line
+            fi
+        fi
+
         # Skip empty lines and comments
         [[ -z "$line" ]] && continue
         [[ "$line" =~ ^[[:space:]]*# ]] && continue
 
-        # Remove inline comments
-        line="${line%%#*}"
+        # Remove inline comments (but not # inside quotes)
+        line=$(echo "$line" | sed 's/[[:space:]]#.*$//')
 
-        # Check indentation level
-        local indent="${line%%[! ]*}"
-        local indent_level=$((${#indent} / 2))
+        # Count leading spaces for indentation
+        local stripped="${line#"${line%%[![:space:]]*}"}"
+        local indent=$(( (${#line} - ${#stripped}) / 2 ))
 
         # Trim whitespace
-        line=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-
-        # Skip empty after trim
+        line="$stripped"
         [[ -z "$line" ]] && continue
 
-        # Check for array item
-        if [[ "$line" =~ ^-[[:space:]]*(.*) ]]; then
-            if [ "$in_array" = true ]; then
-                local item="${BASH_REMATCH[1]}"
-                if [ -n "$array_values" ]; then
-                    array_values="${array_values}|${item}"
-                else
-                    array_values="$item"
-                fi
-            fi
-            continue
-        fi
+        # Skip array items for now (start with -)
+        [[ "$line" =~ ^- ]] && continue
 
-        # End of array
-        if [ "$in_array" = true ]; then
-            export "${prefix}${array_name}=${array_values}"
-            in_array=false
-            array_name=""
-            array_values=""
-        fi
+        # Pop stack when dedenting
+        while [ $indent -lt $prev_indent ] && [ ${#key_stack[@]} -gt 0 ]; do
+            unset 'key_stack[${#key_stack[@]}-1]'
+            prev_indent=$((prev_indent - 1))
+        done
 
         # Parse key: value
-        if [[ "$line" =~ ^([a-zA-Z_][a-zA-Z0-9_]*):(.*)$ ]]; then
-            key="${BASH_REMATCH[1]}"
-            value="${BASH_REMATCH[2]}"
+        if [[ "$line" =~ ^([a-zA-Z_][a-zA-Z0-9_-]*):(.*)$ ]]; then
+            local key="${BASH_REMATCH[1]}"
+            local value="${BASH_REMATCH[2]}"
             value=$(echo "$value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 
-            # Build full key with section prefix
-            local full_key
-            if [ -n "$current_section" ] && [ $indent_level -gt 0 ]; then
-                full_key="${current_section}_${key}"
-            else
-                full_key="$key"
-            fi
+            # Convert key to uppercase and replace - with _
+            key=$(echo "$key" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
 
-            # Convert to uppercase for env var style
-            full_key=$(echo "$full_key" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+            # Build full key from stack
+            local full_key=""
+            for k in "${key_stack[@]}"; do
+                full_key="${full_key}${k}_"
+            done
+            full_key="${full_key}${key}"
 
             if [ -z "$value" ]; then
-                # This is a section header or array start
-                if [ $indent_level -eq 0 ]; then
-                    current_section="$key"
-                    current_section=$(echo "$current_section" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
-                else
-                    # Could be array start - check next line
-                    in_array=true
-                    array_name="$full_key"
-                fi
+                # Section header - push to stack
+                key_stack+=("$key")
+                prev_indent=$((indent + 1))
+            elif [ "$value" = "|" ] || [ "$value" = ">" ]; then
+                # Start of multi-line block
+                in_multiline=true
+                multiline_key="$full_key"
+                multiline_value=""
+                multiline_indent=$indent
             else
-                # Remove quotes if present
+                # Remove quotes
                 value=$(echo "$value" | sed "s/^[\"']//;s/[\"']$//")
 
-                # Expand environment variables in value
+                # Expand environment variables
                 value=$(eval echo "$value" 2>/dev/null || echo "$value")
 
-                # Export the variable
-                export "${prefix}${full_key}=${value}"
+                # Export
+                eval "export ${prefix}${full_key}='${value}'"
             fi
         fi
     done < "$yaml_file"
 
-    # Handle final array
-    if [ "$in_array" = true ] && [ -n "$array_name" ]; then
-        export "${prefix}${array_name}=${array_values}"
+    # Handle case where file ends while in multiline block
+    if [ "$in_multiline" = true ] && [ -n "$multiline_key" ]; then
+        eval "export ${prefix}${multiline_key}=\$multiline_value"
     fi
 }
 
@@ -126,6 +150,12 @@ load_config() {
     : "${DEV_ENV_PORTS_BASEHTTP:=50100}"
     : "${DEV_ENV_PORTS_BASEVITE:=50200}"
 
+    # Export defaults
+    export DEV_ENV_DATABASE_TYPE DEV_ENV_DATABASE_PREFIX
+    export DEV_ENV_DATABASE_CONNECTION_HOST DEV_ENV_DATABASE_CONNECTION_PORT
+    export DEV_ENV_DATABASE_CONNECTION_USER DEV_ENV_DATABASE_CONNECTION_PASSWORD
+    export DEV_ENV_PORTS_BASEHTTPS DEV_ENV_PORTS_BASEHTTP DEV_ENV_PORTS_BASEVITE
+
     # Export port bases with simpler names
     export DEV_ENV_BASE_HTTPS="${DEV_ENV_PORTS_BASEHTTPS}"
     export DEV_ENV_BASE_HTTP="${DEV_ENV_PORTS_BASEHTTP}"
@@ -142,7 +172,9 @@ get_config() {
     # Convert key path to variable name
     local var_name="DEV_ENV_$(echo "$key_path" | tr '[:lower:]' '[:upper:]' | tr '.' '_' | tr '-' '_')"
 
-    local value="${!var_name:-$default}"
+    # Use eval for indirect variable access (works in both bash and zsh)
+    local value
+    eval "value=\"\${$var_name:-$default}\""
     echo "$value"
 }
 
@@ -151,19 +183,18 @@ get_config_array() {
     local key_path="$1"
     local var_name="DEV_ENV_$(echo "$key_path" | tr '[:lower:]' '[:upper:]' | tr '.' '_' | tr '-' '_')"
 
-    local value="${!var_name:-}"
+    local value
+    eval "value=\"\${$var_name:-}\""
     if [ -n "$value" ]; then
         echo "$value" | tr '|' '\n'
     fi
 }
 
 # Process template string with variable substitution
-# Replaces {var} with actual values
 process_template() {
     local template="$1"
     local env_name="$2"
 
-    # Get common values
     local db_name=$(get_config "database.prefix")
     db_name="${db_name}${env_name//-/_}"
 
@@ -172,7 +203,6 @@ process_template() {
     local db_user=$(get_config "database.connection.user" "postgres")
     local db_password=$(get_config "database.connection.password" "postgres")
 
-    # Replace placeholders
     local result="$template"
     result="${result//\{env\}/$env_name}"
     result="${result//\{dbName\}/$db_name}"
