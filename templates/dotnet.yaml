@@ -1,0 +1,60 @@
+# dev-env configuration template for .NET + EF Core projects
+# Copy to .claude/dev-env.yaml and customize for your project
+
+version: "1.0"
+
+project:
+  name: my-project              # Used for directory/database naming (required)
+
+database:
+  type: postgresql              # postgresql | mysql | sqlite
+  prefix: my_project_           # Database name prefix
+  connection:
+    host: ${DEV_DB_HOST:-localhost}
+    port: ${DEV_DB_PORT:-5432}
+    user: ${DEV_DB_USER:-postgres}
+    password: ${DEV_DB_PASSWORD:-postgres}
+
+migrations:
+  tool: efcore                  # efcore | prisma | django | custom
+  efcore:
+    projectPath: src/MyProject.Infrastructure
+    startupProjectPath: src/MyProject.Web
+    context: MyDbContext
+
+storage:                        # Optional: Azure Blob Storage via Azurite
+  type: azurite
+  connection: ${DEV_BLOB_CONNECTION:-DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;}
+  containers:
+    - pattern: "{env}-upload-chunks"
+    - pattern: "{env}-import-files"
+
+ports:
+  baseHttps: 50000              # Environments get ports 50000-50099
+  baseHttp: 50100               # HTTP ports 50100-50199
+  baseVite: 50200               # Vite dev server 50200-50299
+
+build:
+  command: dotnet build --verbosity quiet
+
+hooks:
+  pre-setup: ""
+  post-database: ""
+  post-migrate: |
+    # Example: Seed test users
+    # cd src/MyProject.Web && dotnet run -- --seed-database
+  post-setup: ""
+  pre-cleanup: ""
+
+copyFiles:                      # Files to copy from main repo to worktree
+  - from: src/MyProject.Web/test-data.csv
+    to: src/MyProject.Web/test-data.csv
+
+generateFiles:                  # Files to generate from template
+  - path: src/MyProject.Web/appsettings.local.json
+    template: |
+      {
+        "ConnectionStrings": {
+          "DefaultConnection": "Host={host};Port={port};Database={dbName};Username={user};Password={password}"
+        }
+      }

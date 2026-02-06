@@ -1,0 +1,22 @@
+{
+  "name": "dev-env",
+  "version": "1.0.0",
+  "description": "Worktree-based development environment management with isolated databases, storage, and ports",
+  "keywords": [
+    "claude-code",
+    "claude-code-plugin",
+    "development-environment",
+    "git-worktree",
+    "devops"
+  ],
+  "author": "Daniel Carmingham",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DanielCarmingham/dev-env.git"
+  },
+  "bugs": {
+    "url": "https://github.com/DanielCarmingham/dev-env/issues"
+  },
+  "homepage": "https://github.com/DanielCarmingham/dev-env#readme"
+}

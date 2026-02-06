@@ -1,0 +1,9 @@
+{
+  "name": "dev-env",
+  "description": "Worktree-based development environment management with isolated databases, storage, and ports",
+  "version": "1.0.0",
+  "author": {
+    "name": "Daniel Carmingham"
+  },
+  "repository": "https://github.com/DanielCarmingham/dev-env"
+}
