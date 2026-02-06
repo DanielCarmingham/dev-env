@@ -1,12 +1,13 @@
 {
   "name": "DanielCarmingham-dev-env",
-  "displayName": "dev-env",
   "description": "Worktree-based development environment management with isolated databases, storage, and ports",
-  "version": "1.0.0",
+  "owner": {
+    "name": "Daniel Carmingham"
+  },
   "plugins": [
     {
       "name": "dev-env",
-      "path": "."
+      "source": "./"
     }
   ]
 }
