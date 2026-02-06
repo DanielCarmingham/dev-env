@@ -14,13 +14,22 @@ A Claude Code plugin for worktree-based development environment management with 
 
 ## Installation
 
-```bash
-# Install from marketplace
-claude plugins install dev-env
+Add the marketplace and install the plugin (one-time per machine):
 
-# Or install from GitHub
-claude plugins install DanielCarmingham/dev-env
+```bash
+claude plugin marketplace add DanielCarmingham/dev-env
+claude plugin install dev-env@DanielCarmingham-dev-env
 ```
+
+Or from within Claude Code:
+
+```
+/plugin marketplace add DanielCarmingham/dev-env
+```
+
+Then install and enable `dev-env` from the `/plugin` manager.
+
+Restart Claude Code after installation for the skills to take effect.
 
 ## Quick Start
 
