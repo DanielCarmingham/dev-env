@@ -4,18 +4,13 @@
 
 CLAUDE_JSON="$HOME/.claude.json"
 
-# Check for existing non-debug Firefox instances
-# Firefox doesn't allow remote debugging when other instances are running without it
+# Kill any existing dev-env Firefox instances using our profile prefix
+# Firefox supports multiple instances on different profiles, so we only
+# need to clean up stale dev-env ones — not block on regular Firefox
 browser_check_conflicts() {
-    if pgrep -x "firefox" > /dev/null 2>&1; then
-        if ps aux | grep "[f]irefox" | grep -v -- "-start-debugger-server" | grep -q "Firefox.app"; then
-            echo "Error: Firefox is running without remote debugging enabled." >&2
-            echo "Firefox does not allow debug instances while non-debug instances are running." >&2
-            echo "" >&2
-            echo "Please close all Firefox windows and try again, or run:" >&2
-            echo "  killall 'firefox'" >&2
-            return 1
-        fi
+    if pkill -f "profile /tmp/firefox-debug-profile-" 2>/dev/null; then
+        echo "  Killed stale dev-env Firefox instance"
+        sleep 1
     fi
     return 0
 }
