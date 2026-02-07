@@ -35,8 +35,8 @@ ports:
   baseVite: 50200               # Vite dev server 50200-50299
   baseDebug: 9200               # Chrome remote debugging 9200-9299
 
-browser:                        # Optional: Chrome remote debugging
-  type: chrome
+browser:                        # Optional: browser remote debugging
+  type: chrome                  # chrome | edge | firefox
   startUrl: http://localhost:5173  # URL to open in Chrome
 
 open: code                          # Auto-open editors/tools on environment creation (pipe-delimited)

@@ -23,7 +23,9 @@ dev-env/
 │       ├── db-postgresql.sh    # PostgreSQL adapter
 │       ├── migrate-efcore.sh   # EF Core migrations
 │       ├── storage-azurite.sh  # Azurite blob storage
-│       └── browser-chrome.sh   # Chrome remote debugging
+│       ├── browser-chrome.sh   # Chrome remote debugging
+│       ├── browser-edge.sh     # Edge remote debugging
+│       └── browser-firefox.sh  # Firefox remote debugging
 ├── templates/
 │   └── dotnet.yaml         # .NET project template
 ├── package.json
