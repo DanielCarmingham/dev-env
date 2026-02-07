@@ -37,6 +37,7 @@ calculate_ports() {
     local base_https="${DEV_ENV_BASE_HTTPS:-50000}"
     local base_http="${DEV_ENV_BASE_HTTP:-50100}"
     local base_vite="${DEV_ENV_BASE_VITE:-50200}"
+    local base_debug="${DEV_ENV_BASE_DEBUG:-9200}"
 
     # Calculate initial port based on name
     local base_port
@@ -65,8 +66,9 @@ calculate_ports() {
     HTTPS_PORT=$((base_https + port_offset))
     HTTP_PORT=$((base_http + port_offset))
     VITE_PORT=$((base_vite + port_offset))
+    DEBUG_PORT=$((base_debug + port_offset))
 
-    export HTTPS_PORT HTTP_PORT VITE_PORT
+    export HTTPS_PORT HTTP_PORT VITE_PORT DEBUG_PORT
 }
 
 #

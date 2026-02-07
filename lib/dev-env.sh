@@ -7,6 +7,7 @@
 # Commands:
 #   ls                      List all environments
 #   up <name|issue#> [-o]   Create environment
+#   browser <env>            Relaunch browser with remote debugging
 #   finish [-p] [-s] <env>  Merge to main and cleanup
 #   down [-f] <env>         Remove environment
 #   setup                   First-time setup
@@ -82,6 +83,57 @@ load_storage_adapter() {
     source "$adapter_file"
 }
 
+# Load browser adapter based on config
+load_browser_adapter() {
+    local browser_type=$(get_config "browser.type" "")
+    if [ -z "$browser_type" ]; then
+        return 0  # No browser configured
+    fi
+
+    local adapter_file="$SCRIPT_DIR/adapters/browser-${browser_type}.sh"
+
+    if [ ! -f "$adapter_file" ]; then
+        echo "Error: Unknown browser type '$browser_type'. Adapter not found: $adapter_file" >&2
+        return 1
+    fi
+
+    source "$adapter_file"
+}
+
+# Process auto-open entries from config
+# Runs each pipe-delimited command with the worktree path as argument
+run_open_entries() {
+    local worktree_path="$1"
+
+    local open_entries=$(get_config "open" "")
+    [ -z "$open_entries" ] && return 0
+
+    # Split pipe-delimited entries
+    echo "$open_entries" | tr '|' '\n' | while IFS= read -r entry; do
+        entry=$(echo "$entry" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        [ -z "$entry" ] && continue
+
+        echo "Opening with: $entry $worktree_path"
+        "$entry" "$worktree_path" 2>/dev/null || echo "  Warning: Failed to run '$entry'" >&2
+    done
+}
+
+# Launch the configured browser with remote debugging
+start_browser() {
+    local worktree_path="$1"
+    local env_name="$2"
+
+    [ -z "$(get_config 'browser.type')" ] && return 0
+
+    local start_url=$(get_config "browser.startUrl" "")
+    if browser_check_conflicts; then
+        browser_start "$env_name" "$DEBUG_PORT" "$start_url"
+        browser_update_mcp "$worktree_path" "$DEBUG_PORT"
+    else
+        echo "  Skipping browser launch (close existing instances and use 'dev-env browser' to retry)"
+    fi
+}
+
 # Ensure Docker is running
 ensure_docker() {
     if ! docker info &>/dev/null; then
@@ -126,6 +178,7 @@ Usage: dev-env <command> [args]
 Commands:
   ls                       List all environments
   up <name|issue#> [-o]    Create environment
+  browser <env>             Relaunch browser with remote debugging
   finish [opts] <env>      Merge to main and cleanup
   down [opts] <env>        Remove environment
   setup                    First-time setup
@@ -154,6 +207,7 @@ Each environment includes:
   - Git worktree (sibling directory with isolated branch)
   - Database (project-specific)
   - Blob storage containers (if configured)
+  - Chrome with remote debugging (if configured)
   - Unique development ports
 EOF
 }
@@ -230,6 +284,7 @@ cmd_up() {
     load_db_adapter
     load_migrate_adapter
     load_storage_adapter
+    load_browser_adapter
 
     local open_with=""
     local input=""
@@ -401,12 +456,21 @@ cmd_up() {
     echo "========================================"
     echo ""
     echo "Worktree: $worktree_path"
+    if [ -n "$(get_config 'browser.type')" ]; then
+        echo "Debug port: $DEBUG_PORT"
+    fi
     echo ""
 
     # Set terminal title
     set_terminal_title "$env_name"
 
-    # Open if requested
+    # Launch browser with remote debugging (if configured)
+    start_browser "$worktree_path" "$env_name"
+
+    # Auto-open configured entries (editors/tools)
+    run_open_entries "$worktree_path"
+
+    # Also open if -o flag was passed (in addition to auto-open)
     if [ -n "$open_with" ]; then
         echo "Opening with: $open_with $worktree_path"
         "$open_with" "$worktree_path"
@@ -418,6 +482,7 @@ cmd_down() {
     load_config "$project_root"
     load_db_adapter
     load_storage_adapter
+    load_browser_adapter
 
     local force=false
     local input=""
@@ -507,8 +572,78 @@ cmd_down() {
         storage_delete_containers_for_env "$env_name" "$storage_conn"
     fi
 
+    # Stop browser and clean up MCP config
+    if [ -n "$(get_config 'browser.type')" ]; then
+        echo "Stopping browser..."
+        browser_stop "$env_name"
+        browser_clean_mcp "$worktree_path"
+    fi
+
     echo ""
     echo "Environment '$env_name' removed."
+}
+
+cmd_browser() {
+    local project_root=$(find_project_root) || exit 1
+    load_config "$project_root"
+    load_browser_adapter
+
+    if [ -z "$(get_config 'browser.type')" ]; then
+        echo "Error: No browser configured in dev-env.yaml" >&2
+        echo "Add a 'browser:' section with 'type: chrome' to enable." >&2
+        exit 1
+    fi
+
+    local input=""
+
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            -*)
+                echo "Unknown option: $1" >&2
+                exit 1
+                ;;
+            *)
+                input="$1"
+                shift
+                ;;
+        esac
+    done
+
+    if [ -z "$input" ]; then
+        echo "Usage: dev-env browser <env-name>"
+        echo ""
+        echo "Available environments:"
+        list_environments "$project_root"
+        exit 1
+    fi
+
+    # Find environment by partial match
+    find_env_by_partial "$project_root" "$input"
+
+    if [ "$MATCH_COUNT" -eq 0 ]; then
+        echo "Error: No environment matching '$input' found." >&2
+        exit 1
+    elif [ "$MATCH_COUNT" -gt 1 ]; then
+        echo "Error: Multiple environments match '$input':" >&2
+        for match in "${MATCHES[@]}"; do
+            echo "  $match" >&2
+        done
+        exit 1
+    fi
+
+    local env_name="${MATCHES[0]}"
+    local worktree_path=$(get_worktree_path "$project_root" "$env_name")
+
+    if [ "$input" != "$env_name" ]; then
+        echo "Matched: $env_name"
+    fi
+
+    # Calculate ports (needed for debug port)
+    calculate_ports "$project_root" "$env_name"
+
+    echo ""
+    start_browser "$worktree_path" "$env_name"
 }
 
 cmd_finish() {
@@ -750,6 +885,9 @@ main() {
             ;;
         down)
             cmd_down "$@"
+            ;;
+        browser)
+            cmd_browser "$@"
             ;;
         finish)
             cmd_finish "$@"

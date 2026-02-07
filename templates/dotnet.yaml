@@ -33,6 +33,15 @@ ports:
   baseHttps: 50000              # Environments get ports 50000-50099
   baseHttp: 50100               # HTTP ports 50100-50199
   baseVite: 50200               # Vite dev server 50200-50299
+  baseDebug: 9200               # Chrome remote debugging 9200-9299
+
+browser:                        # Optional: Chrome remote debugging
+  type: chrome
+  startUrl: http://localhost:5173  # URL to open in Chrome
+
+open: code                          # Auto-open editors/tools on environment creation (pipe-delimited)
+                                    # Each entry runs as: <command> <worktree_path>
+                                    # Examples: code, open, subl
 
 build:
   command: dotnet build --verbosity quiet

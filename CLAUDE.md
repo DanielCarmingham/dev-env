@@ -11,6 +11,7 @@ dev-env/
 ├── skills/
 │   ├── up/SKILL.md         # /dev-env:up command
 │   ├── down/SKILL.md       # /dev-env:down command
+│   ├── browser/SKILL.md    # /dev-env:browser command
 │   ├── ls/SKILL.md         # /dev-env:ls command
 │   ├── finish/SKILL.md     # /dev-env:finish command
 │   └── setup/SKILL.md      # /dev-env:setup command
@@ -21,7 +22,8 @@ dev-env/
 │   └── adapters/
 │       ├── db-postgresql.sh    # PostgreSQL adapter
 │       ├── migrate-efcore.sh   # EF Core migrations
-│       └── storage-azurite.sh  # Azurite blob storage
+│       ├── storage-azurite.sh  # Azurite blob storage
+│       └── browser-chrome.sh   # Chrome remote debugging
 ├── templates/
 │   └── dotnet.yaml         # .NET project template
 ├── package.json
@@ -43,6 +45,16 @@ dev-env/
 1. Create `lib/adapters/migrate-{tool}.sh`
 2. Implement: `migrate_run(project_root, env_name)`
 3. Optionally implement: `migrate_add`, `migrate_remove`, `migrate_list`
+
+## Adding a New Browser Adapter
+
+1. Create `lib/adapters/browser-{type}.sh`
+2. Implement required functions:
+   - `browser_check_conflicts()`
+   - `browser_start(env_name, debug_port, start_url)`
+   - `browser_stop(env_name)`
+   - `browser_update_mcp(target_dir, debug_port)`
+   - `browser_clean_mcp(target_dir)`
 
 ## Testing
 
